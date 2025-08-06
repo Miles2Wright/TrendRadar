@@ -20,142 +20,7 @@ import requests
 import yaml
 
 
-VERSION = "3.5.0"
-
-
-# === SMTP邮件配置 ===
-SMTP_CONFIGS = {
-    # Gmail（使用 STARTTLS）
-    "gmail.com": {"server": "smtp.gmail.com", "port": 587, "encryption": "TLS"},
-    # QQ邮箱（使用 SSL，更稳定）
-    "qq.com": {"server": "smtp.qq.com", "port": 465, "encryption": "SSL"},
-    # Outlook（使用 STARTTLS）
-    "outlook.com": {
-        "server": "smtp-mail.outlook.com",
-        "port": 587,
-        "encryption": "TLS",
-    },
-    "hotmail.com": {
-        "server": "smtp-mail.outlook.com",
-        "port": 587,
-        "encryption": "TLS",
-    },
-    "live.com": {"server": "smtp-mail.outlook.com", "port": 587, "encryption": "TLS"},
-    # 网易邮箱（使用 SSL，更稳定）
-    "163.com": {"server": "smtp.163.com", "port": 465, "encryption": "SSL"},
-    "126.com": {"server": "smtp.126.com", "port": 465, "encryption": "SSL"},
-    # 新浪邮箱（使用 SSL）
-    "sina.com": {"server": "smtp.sina.com", "port": 465, "encryption": "SSL"},
-    # 搜狐邮箱（使用 SSL）
-    "sohu.com": {"server": "smtp.sohu.com", "port": 465, "encryption": "SSL"},
-    # 天翼邮箱（使用 SSL）
-    "189.cn": {"server": "smtp.189.cn", "port": 465, "encryption": "SSL"},
-    # 阿里云邮箱（使用 TLS）
-    "aliyun.com": {"server": "smtp.aliyun.com", "port": 465, "encryption": "TLS"},
-}
-
-
-# === 多账号推送工具函数 ===
-def parse_multi_account_config(config_value: str, separator: str = ";") -> List[str]:
-    """
-    解析多账号配置，返回账号列表
-
-    Args:
-        config_value: 配置值字符串，多个账号用分隔符分隔
-        separator: 分隔符，默认为 ;
-
-    Returns:
-        账号列表，空字符串会被保留（用于占位）
-    """
-    if not config_value:
-        return []
-    # 保留空字符串用于占位（如 ";token2" 表示第一个账号无token）
-    accounts = [acc.strip() for acc in config_value.split(separator)]
-    # 过滤掉全部为空的情况
-    if all(not acc for acc in accounts):
-        return []
-    return accounts
-
-
-def validate_paired_configs(
-    configs: Dict[str, List[str]],
-    channel_name: str,
-    required_keys: Optional[List[str]] = None
-) -> Tuple[bool, int]:
-    """
-    验证配对配置的数量是否一致
-
-    Args:
-        configs: 配置字典，key 为配置名，value 为账号列表
-        channel_name: 渠道名称，用于日志输出
-        required_keys: 必须有值的配置项列表
-
-    Returns:
-        (是否验证通过, 账号数量)
-    """
-    # 过滤掉空列表
-    non_empty_configs = {k: v for k, v in configs.items() if v}
-
-    if not non_empty_configs:
-        return True, 0
-
-    # 检查必须项
-    if required_keys:
-        for key in required_keys:
-            if key not in non_empty_configs or not non_empty_configs[key]:
-                return True, 0  # 必须项为空，视为未配置
-
-    # 获取所有非空配置的长度
-    lengths = {k: len(v) for k, v in non_empty_configs.items()}
-    unique_lengths = set(lengths.values())
-
-    if len(unique_lengths) > 1:
-        print(f"❌ {channel_name} 配置错误：配对配置数量不一致，将跳过该渠道推送")
-        for key, length in lengths.items():
-            print(f"   - {key}: {length} 个")
-        return False, 0
-
-    return True, list(unique_lengths)[0] if unique_lengths else 0
-
-
-def limit_accounts(
-    accounts: List[str],
-    max_count: int,
-    channel_name: str
-) -> List[str]:
-    """
-    限制账号数量
-
-    Args:
-        accounts: 账号列表
-        max_count: 最大账号数量
-        channel_name: 渠道名称，用于日志输出
-
-    Returns:
-        限制后的账号列表
-    """
-    if len(accounts) > max_count:
-        print(f"⚠️ {channel_name} 配置了 {len(accounts)} 个账号，超过最大限制 {max_count}，只使用前 {max_count} 个")
-        print(f"   ⚠️ 警告：如果您是 fork 用户，过多账号可能导致 GitHub Actions 运行时间过长，存在账号风险")
-        return accounts[:max_count]
-    return accounts
-
-
-def get_account_at_index(accounts: List[str], index: int, default: str = "") -> str:
-    """
-    安全获取指定索引的账号值
-
-    Args:
-        accounts: 账号列表
-        index: 索引
-        default: 默认值
-
-    Returns:
-        账号值或默认值
-    """
-    if index < len(accounts):
-        return accounts[index] if accounts[index] else default
-    return default
+VERSION = "2.0.3"
 
 
 # === 配置管理 ===
@@ -1956,7 +1821,6 @@ def render_html_content(
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>热点新闻分析</title>
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" integrity="sha512-BNaRQnYJYiPSqHHDb58B0yaPfCu+Wgds8Gp/gU33kqBtgNS4tSPHuGibyoeqMV/TJlSKda6FXzoEyYGjTe+vXA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
         <style>
             * { box-sizing: border-box; }
             body { 
@@ -1982,44 +1846,6 @@ def render_html_content(
                 color: white;
                 padding: 32px 24px;
                 text-align: center;
-                position: relative;
-            }
-            
-            .save-buttons {
-                position: absolute;
-                top: 16px;
-                right: 16px;
-                display: flex;
-                gap: 8px;
-            }
-            
-            .save-btn {
-                background: rgba(255, 255, 255, 0.2);
-                border: 1px solid rgba(255, 255, 255, 0.3);
-                color: white;
-                padding: 8px 16px;
-                border-radius: 6px;
-                cursor: pointer;
-                font-size: 13px;
-                font-weight: 500;
-                transition: all 0.2s ease;
-                backdrop-filter: blur(10px);
-                white-space: nowrap;
-            }
-            
-            .save-btn:hover {
-                background: rgba(255, 255, 255, 0.3);
-                border-color: rgba(255, 255, 255, 0.5);
-                transform: translateY(-1px);
-            }
-            
-            .save-btn:active {
-                transform: translateY(0);
-            }
-            
-            .save-btn:disabled {
-                opacity: 0.6;
-                cursor: not-allowed;
             }
             
             .header-title {
@@ -2323,70 +2149,22 @@ def render_html_content(
                 font-family: 'SF Mono', Consolas, monospace;
             }
             
-            .footer {
-                margin-top: 32px;
-                padding: 20px 24px;
-                background: #f8f9fa;
-                border-top: 1px solid #e5e7eb;
-                text-align: center;
-            }
-            
-            .footer-content {
-                font-size: 13px;
-                color: #6b7280;
-                line-height: 1.6;
-            }
-            
-            .footer-link {
-                color: #4f46e5;
-                text-decoration: none;
-                font-weight: 500;
-                transition: color 0.2s ease;
-            }
-            
-            .footer-link:hover {
-                color: #7c3aed;
-                text-decoration: underline;
-            }
-            
-            .project-name {
-                font-weight: 600;
-                color: #374151;
-            }
-            
             @media (max-width: 480px) {
                 body { padding: 12px; }
                 .header { padding: 24px 20px; }
                 .content { padding: 20px; }
-                .footer { padding: 16px 20px; }
                 .header-info { grid-template-columns: 1fr; gap: 12px; }
                 .news-header { gap: 6px; }
                 .news-content { padding-right: 45px; }
                 .news-item { gap: 8px; }
                 .new-item { gap: 8px; }
                 .news-number { width: 20px; height: 20px; font-size: 12px; }
-                .save-buttons {
-                    position: static;
-                    margin-bottom: 16px;
-                    display: flex;
-                    gap: 8px;
-                    justify-content: center;
-                    flex-direction: column;
-                    width: 100%;
-                }
-                .save-btn {
-                    width: 100%;
-                }
             }
         </style>
     </head>
     <body>
         <div class="container">
             <div class="header">
-                <div class="save-buttons">
-                    <button class="save-btn" onclick="saveAsImage()">保存为图片</button>
-                    <button class="save-btn" onclick="saveAsMultipleImages()">分段保存</button>
-                </div>
                 <div class="header-title">热点新闻分析</div>
                 <div class="header-info">
                     <div class="info-item">
@@ -2409,18 +2187,18 @@ def render_html_content(
                     <div class="info-item">
                         <span class="info-label">新闻总数</span>
                         <span class="info-value">"""
-
+    
     html += f"{total_titles} 条"
-
+    
     # 计算筛选后的热点新闻数量
     hot_news_count = sum(len(stat["titles"]) for stat in report_data["stats"])
-
+    
     html += """</span>
                     </div>
                     <div class="info-item">
                         <span class="info-label">热点新闻</span>
                         <span class="info-value">"""
-
+    
     html += f"{hot_news_count} 条"
 
     html += """</span>
@@ -2430,7 +2208,7 @@ def render_html_content(
                         <span class="info-value">"""
 
     now = get_beijing_time()
-    html += now.strftime("%m-%d %H:%M")
+    html += now.strftime('%m-%d %H:%M')
 
     html += """</span>
                     </div>
@@ -2451,14 +2229,13 @@ def render_html_content(
                     </ul>
                 </div>"""
 
-    # 生成热点词汇统计部分的HTML
-    stats_html = ""
+    # 处理主要统计数据
     if report_data["stats"]:
         total_count = len(report_data["stats"])
-
+        
         for i, stat in enumerate(report_data["stats"], 1):
             count = stat["count"]
-
+            
             # 确定热度等级
             if count >= 10:
                 count_class = "hot"
@@ -2468,8 +2245,8 @@ def render_html_content(
                 count_class = ""
 
             escaped_word = html_escape(stat["word"])
-
-            stats_html += f"""
+            
+            html += f"""
                 <div class="word-group">
                     <div class="word-header">
                         <div class="word-info">
@@ -2483,95 +2260,88 @@ def render_html_content(
             for j, title_data in enumerate(stat["titles"], 1):
                 is_new = title_data.get("is_new", False)
                 new_class = "new" if is_new else ""
-
-                stats_html += f"""
+                
+                html += f"""
                     <div class="news-item {new_class}">
                         <div class="news-number">{j}</div>
                         <div class="news-content">
                             <div class="news-header">
                                 <span class="source-name">{html_escape(title_data["source_name"])}</span>"""
-
+                
                 # 处理排名显示
                 ranks = title_data.get("ranks", [])
                 if ranks:
                     min_rank = min(ranks)
                     max_rank = max(ranks)
                     rank_threshold = title_data.get("rank_threshold", 10)
-
+                    
                     # 确定排名等级
                     if min_rank <= 3:
                         rank_class = "top"
                     elif min_rank <= rank_threshold:
-                        rank_class = "high"
+                        rank_class = "high" 
                     else:
                         rank_class = ""
-
+                    
                     if min_rank == max_rank:
                         rank_text = str(min_rank)
                     else:
                         rank_text = f"{min_rank}-{max_rank}"
-
-                    stats_html += f'<span class="rank-num {rank_class}">{rank_text}</span>'
-
+                        
+                    html += f'<span class="rank-num {rank_class}">{rank_text}</span>'
+                
                 # 处理时间显示
                 time_display = title_data.get("time_display", "")
                 if time_display:
                     # 简化时间显示格式，将波浪线替换为~
-                    simplified_time = (
-                        time_display.replace(" ~ ", "~")
-                        .replace("[", "")
-                        .replace("]", "")
-                    )
-                    stats_html += (
-                        f'<span class="time-info">{html_escape(simplified_time)}</span>'
-                    )
-
+                    simplified_time = time_display.replace(" ~ ", "~").replace("[", "").replace("]", "")
+                    html += f'<span class="time-info">{html_escape(simplified_time)}</span>'
+                
                 # 处理出现次数
                 count_info = title_data.get("count", 1)
                 if count_info > 1:
-                    stats_html += f'<span class="count-info">{count_info}次</span>'
-
-                stats_html += """
+                    html += f'<span class="count-info">{count_info}次</span>'
+                
+                html += """
                             </div>
                             <div class="news-title">"""
-
+                
                 # 处理标题和链接
                 escaped_title = html_escape(title_data["title"])
                 link_url = title_data.get("mobile_url") or title_data.get("url", "")
-
+                
                 if link_url:
                     escaped_url = html_escape(link_url)
-                    stats_html += f'<a href="{escaped_url}" target="_blank" class="news-link">{escaped_title}</a>'
+                    html += f'<a href="{escaped_url}" target="_blank" class="news-link">{escaped_title}</a>'
                 else:
-                    stats_html += escaped_title
-
-                stats_html += """
+                    html += escaped_title
+                
+                html += """
                             </div>
                         </div>
                     </div>"""
 
-            stats_html += """
+            html += """
                 </div>"""
 
-    # 生成新增新闻区域的HTML
-    new_titles_html = ""
+    # 处理新增新闻区域
     if report_data["new_titles"]:
-        new_titles_html += f"""
+        html += f"""
                 <div class="new-section">
                     <div class="new-section-title">本次新增热点 (共 {report_data['total_new_count']} 条)</div>"""
 
         for source_data in report_data["new_titles"]:
             escaped_source = html_escape(source_data["source_name"])
             titles_count = len(source_data["titles"])
-
-            new_titles_html += f"""
+            
+            html += f"""
                     <div class="new-source-group">
                         <div class="new-source-title">{escaped_source} · {titles_count}条</div>"""
 
             # 为新增新闻也添加序号
             for idx, title_data in enumerate(source_data["titles"], 1):
                 ranks = title_data.get("ranks", [])
-
+                
                 # 处理新增新闻的排名显示
                 rank_class = ""
                 if ranks:
@@ -2580,7 +2350,7 @@ def render_html_content(
                         rank_class = "top"
                     elif min_rank <= title_data.get("rank_threshold", 10):
                         rank_class = "high"
-
+                    
                     if len(ranks) == 1:
                         rank_text = str(ranks[0])
                     else:
@@ -2588,371 +2358,37 @@ def render_html_content(
                 else:
                     rank_text = "?"
 
-                new_titles_html += f"""
+                html += f"""
                         <div class="new-item">
                             <div class="new-item-number">{idx}</div>
                             <div class="new-item-rank {rank_class}">{rank_text}</div>
                             <div class="new-item-content">
                                 <div class="new-item-title">"""
-
+                
                 # 处理新增新闻的链接
                 escaped_title = html_escape(title_data["title"])
                 link_url = title_data.get("mobile_url") or title_data.get("url", "")
-
+                
                 if link_url:
                     escaped_url = html_escape(link_url)
-                    new_titles_html += f'<a href="{escaped_url}" target="_blank" class="news-link">{escaped_title}</a>'
+                    html += f'<a href="{escaped_url}" target="_blank" class="news-link">{escaped_title}</a>'
                 else:
-                    new_titles_html += escaped_title
-
-                new_titles_html += """
+                    html += escaped_title
+                
+                html += """
                                 </div>
                             </div>
                         </div>"""
 
-            new_titles_html += """
+            html += """
                     </div>"""
 
-        new_titles_html += """
+        html += """
                 </div>"""
 
-    # 根据配置决定内容顺序
-    if CONFIG.get("REVERSE_CONTENT_ORDER", False):
-        # 新增热点在前，热点词汇统计在后
-        html += new_titles_html + stats_html
-    else:
-        # 默认：热点词汇统计在前，新增热点在后
-        html += stats_html + new_titles_html
-
     html += """
-            </div>
-            
-            <div class="footer">
-                <div class="footer-content">
-                    由 <span class="project-name">TrendRadar</span> 生成 · 
-                    <a href="https://github.com/sansan0/TrendRadar" target="_blank" class="footer-link">
-                        GitHub 开源项目
-                    </a>"""
-
-    if update_info:
-        html += f"""
-                    <br>
-                    <span style="color: #ea580c; font-weight: 500;">
-                        发现新版本 {update_info['remote_version']}，当前版本 {update_info['current_version']}
-                    </span>"""
-
-    html += """
-                </div>
             </div>
         </div>
-        
-        <script>
-            async function saveAsImage() {
-                const button = event.target;
-                const originalText = button.textContent;
-                
-                try {
-                    button.textContent = '生成中...';
-                    button.disabled = true;
-                    window.scrollTo(0, 0);
-                    
-                    // 等待页面稳定
-                    await new Promise(resolve => setTimeout(resolve, 200));
-                    
-                    // 截图前隐藏按钮
-                    const buttons = document.querySelector('.save-buttons');
-                    buttons.style.visibility = 'hidden';
-                    
-                    // 再次等待确保按钮完全隐藏
-                    await new Promise(resolve => setTimeout(resolve, 100));
-                    
-                    const container = document.querySelector('.container');
-                    
-                    const canvas = await html2canvas(container, {
-                        backgroundColor: '#ffffff',
-                        scale: 1.5,
-                        useCORS: true,
-                        allowTaint: false,
-                        imageTimeout: 10000,
-                        removeContainer: false,
-                        foreignObjectRendering: false,
-                        logging: false,
-                        width: container.offsetWidth,
-                        height: container.offsetHeight,
-                        x: 0,
-                        y: 0,
-                        scrollX: 0,
-                        scrollY: 0,
-                        windowWidth: window.innerWidth,
-                        windowHeight: window.innerHeight
-                    });
-                    
-                    buttons.style.visibility = 'visible';
-                    
-                    const link = document.createElement('a');
-                    const now = new Date();
-                    const filename = `TrendRadar_热点新闻分析_${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}.png`;
-                    
-                    link.download = filename;
-                    link.href = canvas.toDataURL('image/png', 1.0);
-                    
-                    // 触发下载
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
-                    
-                    button.textContent = '保存成功!';
-                    setTimeout(() => {
-                        button.textContent = originalText;
-                        button.disabled = false;
-                    }, 2000);
-                    
-                } catch (error) {
-                    const buttons = document.querySelector('.save-buttons');
-                    buttons.style.visibility = 'visible';
-                    button.textContent = '保存失败';
-                    setTimeout(() => {
-                        button.textContent = originalText;
-                        button.disabled = false;
-                    }, 2000);
-                }
-            }
-            
-            async function saveAsMultipleImages() {
-                const button = event.target;
-                const originalText = button.textContent;
-                const container = document.querySelector('.container');
-                const scale = 1.5; 
-                const maxHeight = 5000 / scale;
-                
-                try {
-                    button.textContent = '分析中...';
-                    button.disabled = true;
-                    
-                    // 获取所有可能的分割元素
-                    const newsItems = Array.from(container.querySelectorAll('.news-item'));
-                    const wordGroups = Array.from(container.querySelectorAll('.word-group'));
-                    const newSection = container.querySelector('.new-section');
-                    const errorSection = container.querySelector('.error-section');
-                    const header = container.querySelector('.header');
-                    const footer = container.querySelector('.footer');
-                    
-                    // 计算元素位置和高度
-                    const containerRect = container.getBoundingClientRect();
-                    const elements = [];
-                    
-                    // 添加header作为必须包含的元素
-                    elements.push({
-                        type: 'header',
-                        element: header,
-                        top: 0,
-                        bottom: header.offsetHeight,
-                        height: header.offsetHeight
-                    });
-                    
-                    // 添加错误信息（如果存在）
-                    if (errorSection) {
-                        const rect = errorSection.getBoundingClientRect();
-                        elements.push({
-                            type: 'error',
-                            element: errorSection,
-                            top: rect.top - containerRect.top,
-                            bottom: rect.bottom - containerRect.top,
-                            height: rect.height
-                        });
-                    }
-                    
-                    // 按word-group分组处理news-item
-                    wordGroups.forEach(group => {
-                        const groupRect = group.getBoundingClientRect();
-                        const groupNewsItems = group.querySelectorAll('.news-item');
-                        
-                        // 添加word-group的header部分
-                        const wordHeader = group.querySelector('.word-header');
-                        if (wordHeader) {
-                            const headerRect = wordHeader.getBoundingClientRect();
-                            elements.push({
-                                type: 'word-header',
-                                element: wordHeader,
-                                parent: group,
-                                top: groupRect.top - containerRect.top,
-                                bottom: headerRect.bottom - containerRect.top,
-                                height: headerRect.height
-                            });
-                        }
-                        
-                        // 添加每个news-item
-                        groupNewsItems.forEach(item => {
-                            const rect = item.getBoundingClientRect();
-                            elements.push({
-                                type: 'news-item',
-                                element: item,
-                                parent: group,
-                                top: rect.top - containerRect.top,
-                                bottom: rect.bottom - containerRect.top,
-                                height: rect.height
-                            });
-                        });
-                    });
-                    
-                    // 添加新增新闻部分
-                    if (newSection) {
-                        const rect = newSection.getBoundingClientRect();
-                        elements.push({
-                            type: 'new-section',
-                            element: newSection,
-                            top: rect.top - containerRect.top,
-                            bottom: rect.bottom - containerRect.top,
-                            height: rect.height
-                        });
-                    }
-                    
-                    // 添加footer
-                    const footerRect = footer.getBoundingClientRect();
-                    elements.push({
-                        type: 'footer',
-                        element: footer,
-                        top: footerRect.top - containerRect.top,
-                        bottom: footerRect.bottom - containerRect.top,
-                        height: footer.offsetHeight
-                    });
-                    
-                    // 计算分割点
-                    const segments = [];
-                    let currentSegment = { start: 0, end: 0, height: 0, includeHeader: true };
-                    let headerHeight = header.offsetHeight;
-                    currentSegment.height = headerHeight;
-                    
-                    for (let i = 1; i < elements.length; i++) {
-                        const element = elements[i];
-                        const potentialHeight = element.bottom - currentSegment.start;
-                        
-                        // 检查是否需要创建新分段
-                        if (potentialHeight > maxHeight && currentSegment.height > headerHeight) {
-                            // 在前一个元素结束处分割
-                            currentSegment.end = elements[i - 1].bottom;
-                            segments.push(currentSegment);
-                            
-                            // 开始新分段
-                            currentSegment = {
-                                start: currentSegment.end,
-                                end: 0,
-                                height: element.bottom - currentSegment.end,
-                                includeHeader: false
-                            };
-                        } else {
-                            currentSegment.height = potentialHeight;
-                            currentSegment.end = element.bottom;
-                        }
-                    }
-                    
-                    // 添加最后一个分段
-                    if (currentSegment.height > 0) {
-                        currentSegment.end = container.offsetHeight;
-                        segments.push(currentSegment);
-                    }
-                    
-                    button.textContent = `生成中 (0/${segments.length})...`;
-                    
-                    // 隐藏保存按钮
-                    const buttons = document.querySelector('.save-buttons');
-                    buttons.style.visibility = 'hidden';
-                    
-                    // 为每个分段生成图片
-                    const images = [];
-                    for (let i = 0; i < segments.length; i++) {
-                        const segment = segments[i];
-                        button.textContent = `生成中 (${i + 1}/${segments.length})...`;
-                        
-                        // 创建临时容器用于截图
-                        const tempContainer = document.createElement('div');
-                        tempContainer.style.cssText = `
-                            position: absolute;
-                            left: -9999px;
-                            top: 0;
-                            width: ${container.offsetWidth}px;
-                            background: white;
-                        `;
-                        tempContainer.className = 'container';
-                        
-                        // 克隆容器内容
-                        const clonedContainer = container.cloneNode(true);
-                        
-                        // 移除克隆内容中的保存按钮
-                        const clonedButtons = clonedContainer.querySelector('.save-buttons');
-                        if (clonedButtons) {
-                            clonedButtons.style.display = 'none';
-                        }
-                        
-                        tempContainer.appendChild(clonedContainer);
-                        document.body.appendChild(tempContainer);
-                        
-                        // 等待DOM更新
-                        await new Promise(resolve => setTimeout(resolve, 100));
-                        
-                        // 使用html2canvas截取特定区域
-                        const canvas = await html2canvas(clonedContainer, {
-                            backgroundColor: '#ffffff',
-                            scale: scale,
-                            useCORS: true,
-                            allowTaint: false,
-                            imageTimeout: 10000,
-                            logging: false,
-                            width: container.offsetWidth,
-                            height: segment.end - segment.start,
-                            x: 0,
-                            y: segment.start,
-                            windowWidth: window.innerWidth,
-                            windowHeight: window.innerHeight
-                        });
-                        
-                        images.push(canvas.toDataURL('image/png', 1.0));
-                        
-                        // 清理临时容器
-                        document.body.removeChild(tempContainer);
-                    }
-                    
-                    // 恢复按钮显示
-                    buttons.style.visibility = 'visible';
-                    
-                    // 下载所有图片
-                    const now = new Date();
-                    const baseFilename = `TrendRadar_热点新闻分析_${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}`;
-                    
-                    for (let i = 0; i < images.length; i++) {
-                        const link = document.createElement('a');
-                        link.download = `${baseFilename}_part${i + 1}.png`;
-                        link.href = images[i];
-                        document.body.appendChild(link);
-                        link.click();
-                        document.body.removeChild(link);
-                        
-                        // 延迟一下避免浏览器阻止多个下载
-                        await new Promise(resolve => setTimeout(resolve, 100));
-                    }
-                    
-                    button.textContent = `已保存 ${segments.length} 张图片!`;
-                    setTimeout(() => {
-                        button.textContent = originalText;
-                        button.disabled = false;
-                    }, 2000);
-                    
-                } catch (error) {
-                    console.error('分段保存失败:', error);
-                    const buttons = document.querySelector('.save-buttons');
-                    buttons.style.visibility = 'visible';
-                    button.textContent = '保存失败';
-                    setTimeout(() => {
-                        button.textContent = originalText;
-                        button.disabled = false;
-                    }, 2000);
-                }
-            }
-            
-            document.addEventListener('DOMContentLoaded', function() {
-                window.scrollTo(0, 0);
-            });
-        </script>
     </body>
     </html>
     """
