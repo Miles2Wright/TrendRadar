@@ -157,10 +157,11 @@ class AnalyticsTools:
         self,
         topic: str,
         analysis_type: str = "trend",
-        date_range: Optional[Dict[str, str]] = None,
+        time_range: str = "7d",
         granularity: str = "day",
         threshold: float = 3.0,
         time_window: int = 24,
+        lookback_days: int = 7,
         lookahead_hours: int = 6,
         confidence_threshold: float = 0.7
     ) -> Dict:
@@ -174,21 +175,20 @@ class AnalyticsTools:
                 - "lifecycle": 生命周期分析（从出现到消失的完整周期）
                 - "viral": 异常热度检测（识别突然爆火的话题）
                 - "predict": 话题预测（预测未来可能的热点）
-            date_range: 日期范围（trend和lifecycle模式），可选
-                       - **格式**: {"start": "YYYY-MM-DD", "end": "YYYY-MM-DD"}
-                       - **默认**: 不指定时默认分析最近7天
+            time_range: 时间范围（trend模式），默认"7d"（7d/24h/1w/1m/2m）
             granularity: 时间粒度（trend模式），默认"day"（hour/day）
             threshold: 热度突增倍数阈值（viral模式），默认3.0
             time_window: 检测时间窗口小时数（viral模式），默认24
+            lookback_days: 回溯天数（lifecycle模式），默认7
             lookahead_hours: 预测未来小时数（predict模式），默认6
             confidence_threshold: 置信度阈值（predict模式），默认0.7
 
         Returns:
             趋势分析结果字典
 
-        Examples (假设今天是 2025-11-17):
-            - 用户："分析AI最近7天的趋势" → analyze_topic_trend_unified(topic="人工智能", analysis_type="trend", date_range={"start": "2025-11-11", "end": "2025-11-17"})
-            - 用户："看看特斯拉本月的热度" → analyze_topic_trend_unified(topic="特斯拉", analysis_type="lifecycle", date_range={"start": "2025-11-01", "end": "2025-11-17"})
+        Examples:
+            - analyze_topic_trend_unified(topic="人工智能", analysis_type="trend", time_range="7d")
+            - analyze_topic_trend_unified(topic="特斯拉", analysis_type="lifecycle", lookback_days=7)
             - analyze_topic_trend_unified(topic="比特币", analysis_type="viral", threshold=3.0)
             - analyze_topic_trend_unified(topic="ChatGPT", analysis_type="predict", lookahead_hours=6)
         """
@@ -206,13 +206,13 @@ class AnalyticsTools:
             if analysis_type == "trend":
                 return self.get_topic_trend_analysis(
                     topic=topic,
-                    date_range=date_range,
+                    time_range=time_range,
                     granularity=granularity
                 )
             elif analysis_type == "lifecycle":
                 return self.analyze_topic_lifecycle(
                     topic=topic,
-                    date_range=date_range
+                    lookback_days=lookback_days
                 )
             elif analysis_type == "viral":
                 # viral模式不需要topic参数，使用通用检测
@@ -244,7 +244,7 @@ class AnalyticsTools:
     def get_topic_trend_analysis(
         self,
         topic: str,
-        date_range: Optional[Dict[str, str]] = None,
+        time_range: str = "7d",
         granularity: str = "day"
     ) -> Dict:
         """
@@ -252,9 +252,7 @@ class AnalyticsTools:
 
         Args:
             topic: 话题关键词
-            date_range: 日期范围（可选）
-                       - **格式**: {"start": "YYYY-MM-DD", "end": "YYYY-MM-DD"}
-                       - **默认**: 不指定时默认分析最近7天
+            time_range: 时间范围，格式：7d（7天）、24h（24小时）、1w（1周）、1m（1个月）、2m（2个月）
             granularity: 时间粒度，仅支持 day（天）
 
         Returns:
@@ -266,20 +264,20 @@ class AnalyticsTools:
             - "查看'比特币'过去一周的热度变化"
             - "看看'iPhone'最近7天的趋势如何"
             - "分析'特斯拉'最近一个月的热度趋势"
-            - "查看'ChatGPT'2024年12月的趋势变化"
+            - "查看'ChatGPT'过去2个月的趋势变化"
 
             代码调用示例：
             >>> tools = AnalyticsTools()
-            >>> # 分析7天趋势（假设今天是 2025-11-17）
+            >>> # 分析7天趋势
             >>> result = tools.get_topic_trend_analysis(
             ...     topic="人工智能",
-            ...     date_range={"start": "2025-11-11", "end": "2025-11-17"},
+            ...     time_range="7d",
             ...     granularity="day"
             ... )
-            >>> # 分析历史月份趋势
+            >>> # 分析1个月趋势
             >>> result = tools.get_topic_trend_analysis(
             ...     topic="特斯拉",
-            ...     date_range={"start": "2024-12-01", "end": "2024-12-31"},
+            ...     time_range="1m",
             ...     granularity="day"
             ... )
             >>> print(result['trend_data'])
@@ -296,21 +294,15 @@ class AnalyticsTools:
                     suggestion="当前仅支持 'day' 粒度，因为底层数据按天聚合"
                 )
 
-            # 处理日期范围（不指定时默认最近7天）
-            if date_range:
-                from ..utils.validators import validate_date_range
-                date_range_tuple = validate_date_range(date_range)
-                start_date, end_date = date_range_tuple
-            else:
-                # 默认最近7天
-                end_date = datetime.now()
-                start_date = end_date - timedelta(days=6)
+            # 解析时间范围
+            days = self._parse_time_range(time_range)
 
             # 收集趋势数据
             trend_data = []
+            start_date = datetime.now() - timedelta(days=days)
             current_date = start_date
 
-            while current_date <= end_date:
+            while current_date <= datetime.now():
                 try:
                     all_titles, _, _ = self.data_service.parser.read_all_titles_for_date(
                         date=current_date
@@ -344,7 +336,6 @@ class AnalyticsTools:
 
             # 计算趋势指标
             counts = [item["count"] for item in trend_data]
-            total_days = (end_date - start_date).days + 1
 
             if len(counts) >= 2:
                 # 计算涨跌幅度
@@ -368,11 +359,7 @@ class AnalyticsTools:
             return {
                 "success": True,
                 "topic": topic,
-                "date_range": {
-                    "start": start_date.strftime("%Y-%m-%d"),
-                    "end": end_date.strftime("%Y-%m-%d"),
-                    "total_days": total_days
-                },
+                "time_range": time_range,
                 "granularity": granularity,
                 "trend_data": trend_data,
                 "statistics": {
@@ -421,10 +408,10 @@ class AnalyticsTools:
             - "分析各平台今天的热点分布"
 
             代码调用示例：
-            >>> # 对比各平台（假设今天是 2025-11-17）
+            >>> tools = AnalyticsTools()
             >>> result = tools.compare_platforms(
             ...     topic="人工智能",
-            ...     date_range={"start": "2025-11-08", "end": "2025-11-17"}
+            ...     date_range={"start": "2025-10-01", "end": "2025-10-11"}
             ... )
             >>> print(result['platform_stats'])
         """
@@ -668,10 +655,10 @@ class AnalyticsTools:
             ...     topic="特斯拉",
             ...     limit=10
             ... )
-            >>> # 分析一周内的特斯拉新闻（假设今天是 2025-11-17）
+            >>> # 分析一周内的特斯拉新闻，返回前10条按权重排序
             >>> result = tools.analyze_sentiment(
             ...     topic="特斯拉",
-            ...     date_range={"start": "2025-11-11", "end": "2025-11-17"},
+            ...     date_range={"start": "2025-10-06", "end": "2025-10-13"},
             ...     limit=10
             ... )
             >>> print(result['ai_prompt'])  # 获取生成的提示词
@@ -1355,9 +1342,9 @@ class AnalyticsTools:
             - "分析各平台的发布时间规律"
 
             代码调用示例：
-            >>> # 查看各平台活跃度（假设今天是 2025-11-17）
+            >>> tools = AnalyticsTools()
             >>> result = tools.get_platform_activity_stats(
-            ...     date_range={"start": "2025-11-08", "end": "2025-11-17"}
+            ...     date_range={"start": "2025-10-01", "end": "2025-10-11"}
             ... )
             >>> print(result['platform_activity'])
         """
@@ -1465,16 +1452,14 @@ class AnalyticsTools:
     def analyze_topic_lifecycle(
         self,
         topic: str,
-        date_range: Optional[Dict[str, str]] = None
+        lookback_days: int = 7
     ) -> Dict:
         """
         话题生命周期分析 - 追踪话题从出现到消失的完整周期
 
         Args:
             topic: 话题关键词
-            date_range: 日期范围（可选）
-                       - **格式**: {"start": "YYYY-MM-DD", "end": "YYYY-MM-DD"}
-                       - **默认**: 不指定时默认分析最近7天
+            lookback_days: 回溯天数
 
         Returns:
             话题生命周期分析结果
@@ -1486,31 +1471,24 @@ class AnalyticsTools:
             - "追踪'比特币'话题的热度变化"
 
             代码调用示例：
-            >>> # 分析话题生命周期（假设今天是 2025-11-17）
+            >>> tools = AnalyticsTools()
             >>> result = tools.analyze_topic_lifecycle(
             ...     topic="人工智能",
-            ...     date_range={"start": "2025-10-19", "end": "2025-11-17"}
+            ...     lookback_days=7
             ... )
             >>> print(result['lifecycle_stage'])
         """
         try:
             # 参数验证
             topic = validate_keyword(topic)
-
-            # 处理日期范围（不指定时默认最近7天）
-            if date_range:
-                from ..utils.validators import validate_date_range
-                date_range_tuple = validate_date_range(date_range)
-                start_date, end_date = date_range_tuple
-            else:
-                # 默认最近7天
-                end_date = datetime.now()
-                start_date = end_date - timedelta(days=6)
+            lookback_days = validate_limit(lookback_days, default=7, max_limit=30)
 
             # 收集话题历史数据
             lifecycle_data = []
+            start_date = datetime.now() - timedelta(days=lookback_days)
+
             current_date = start_date
-            while current_date <= end_date:
+            while current_date <= datetime.now():
                 try:
                     all_titles, _, _ = self.data_service.parser.read_all_titles_for_date(
                         date=current_date
@@ -1536,16 +1514,12 @@ class AnalyticsTools:
 
                 current_date += timedelta(days=1)
 
-            # 计算分析天数
-            total_days = (end_date - start_date).days + 1
-
             # 分析生命周期阶段
             counts = [item["count"] for item in lifecycle_data]
 
             if not any(counts):
-                time_desc = f"{start_date.strftime('%Y-%m-%d')} 至 {end_date.strftime('%Y-%m-%d')}"
                 raise DataNotFoundError(
-                    f"在 {time_desc} 内未找到话题 '{topic}'",
+                    f"在过去 {lookback_days} 天内未找到话题 '{topic}'",
                     suggestion="请尝试其他话题或扩大时间范围"
                 )
 
@@ -1580,7 +1554,7 @@ class AnalyticsTools:
 
             if active_days <= 2 and max_count > avg_count * 2:
                 topic_type = "昙花一现"
-            elif active_days >= total_days * 0.6:
+            elif active_days >= lookback_days * 0.6:
                 topic_type = "持续热点"
             else:
                 topic_type = "周期性热点"
@@ -1588,11 +1562,7 @@ class AnalyticsTools:
             return {
                 "success": True,
                 "topic": topic,
-                "date_range": {
-                    "start": start_date.strftime("%Y-%m-%d"),
-                    "end": end_date.strftime("%Y-%m-%d"),
-                    "total_days": total_days
-                },
+                "lookback_days": lookback_days,
                 "lifecycle_data": lifecycle_data,
                 "analysis": {
                     "first_appearance": first_appearance,
@@ -1919,6 +1889,29 @@ class AnalyticsTools:
             }
 
     # ==================== 辅助方法 ====================
+
+    def _parse_time_range(self, time_range: str) -> int:
+        """解析时间范围字符串为天数"""
+        match = re.match(r'(\d+)([dhwm])', time_range.lower())
+        if not match:
+            raise InvalidParameterError(
+                f"无效的时间范围格式: {time_range}",
+                suggestion="格式示例：7d（7天）、24h（24小时）、1w（1周）、1m（1个月）、2m（2个月）"
+            )
+
+        value = int(match.group(1))
+        unit = match.group(2)
+
+        if unit == 'h':
+            return max(1, value // 24)  # 转换为天数
+        elif unit == 'd':
+            return value
+        elif unit == 'w':
+            return value * 7
+        elif unit == 'm':
+            return value * 30  # 1个月按30天计算
+
+        return value
 
     def _extract_keywords(self, title: str, min_length: int = 2) -> List[str]:
         """
